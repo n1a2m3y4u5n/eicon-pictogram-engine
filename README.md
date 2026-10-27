@@ -1,91 +1,65 @@
-# eicon pictogram engine
+# eicon-pictogram-engine
 
-A small head-modifier compiler that turns a `.p` source file of macro
-labels into pictogram PNGs and a combined PDF, intended for medicine
-and medical-device instructions for functionally illiterate patients.
+`.p` 소스 파일을 픽토그램 PNG와 PDF로 컴파일하는 작은 컴파일러입니다. SnapCare가 쓰는 픽토그램 합성 엔진(SIGIL)의 독립 버전입니다.
 
-```
-engine/
-├── main.py                     compiler: python main.py <source.p>
-├── engine.py                   parser + compositor + renderer
-├── dictionary.json             vocabulary (heads, modifiers, operators)
-├── assets/
-│   ├── DESIGN_GUIDE.md         drawing spec for every PNG
-│   ├── head/                   your head PNGs (512×512 transparent)
-│   └── modifier/               your modifier PNGs
-└── examples/sample.p           example source
-```
+## 소개
 
-Requires Pillow (`pip install Pillow`). Python 3.10+.
+글을 읽기 어려운 환자를 위한 의약품, 의료기기 사용 안내용 픽토그램을 만듭니다. `\twice_daily{\pill_bottle{\food_bowl}}`처럼 머리(head)와 수식어(modifier)를 조합한 매크로 한 줄이 그림 한 장이 됩니다. 정해진 그림 중 하나를 고르는 방식이 아니라 부품을 조합해 새 그림을 만들기 때문에, 사전에 부품을 추가하면 코드 변경 없이 표현이 늘어납니다. SnapCare 저장소의 `engine/`과 같은 `.p` 문법을 씁니다.
 
-## Compiling a source file
+## 주요 기능
 
-```bash
-python main.py examples/sample.p
-```
+- 한 줄이 한 개의 라벨입니다. 라벨 하나가 PNG 한 장이 되고, 모든 라벨을 순서대로 모은 PDF도 만듭니다.
+- 숫자를 쓰지 않습니다. 수량은 반복(`\twice_daily`, `\three_times_daily`, `\four_times_daily`)이나 `\half{...}`로 나타냅니다.
+- 여러 단계는 왼쪽에서 오른쪽 배치로만 순서를 나타냅니다. 출력에 글자나 숫자가 없습니다.
+- `dictionary.json`에 항목을 추가하고 512x512 투명 PNG를 `assets/head/` 또는 `assets/modifier/`에 넣으면 부품이 늘어납니다. 그리는 규격은 `assets/DESIGN_GUIDE.md`에 있습니다.
 
-For a source file at `path/to/test1.p` the compiler creates a folder
-`path/to/test1/` containing one PNG per label (numbered) plus a
-combined `test1.pdf` with all labels as pages, in order.
-
-Options:
-- `--out DIR` choose a different output directory
-- `--no-pdf` skip the combined PDF
-- `--size N` panel size in pixels (default 512)
-- `--list` print every available macro and exit
-- `--info` print manifest summary and exit
-
-## Source file format
-
-Each non-blank line is one **label**: a sequence of top-level pictograms
-separated by whitespace. `%` or `#` starts a comment that runs to the
-end of the line.
+### 문법
 
 ```
-% Antibiotic course: wash hands, then a pill twice a day with food
+\head                                  머리만
+\head{\modifier}                       머리의 슬롯 안에 수식어 하나
+\head{\modifier}{\modifier}            첫 번째는 안쪽, 두 번째는 머리 위
+\head{\modifier}{\modifier}{\modifier} 첫 번째는 안쪽, 나머지는 위쪽 한 줄
+\twice_daily{X}                        X를 2칸에 반복
+\three_times_daily{X}                  3칸에 반복
+\four_times_daily{X}                   4칸에 반복
+\no{X}                                 전체 위에 굵은 가위표
+\half{X}                               X의 왼쪽 절반만 표시
+```
+
+소스 파일 예시입니다. `%` 또는 `#`으로 시작하면 줄 끝까지 주석입니다.
+
+```
+% 항생제: 손을 씻고, 하루 두 번 음식과 함께 알약
 \hand_wash \twice_daily{\pill_bottle{\food_bowl}}
 
-% Half a tablet three times a day with water
+% 반 알을 하루 세 번 물과 함께
 \three_times_daily{\half{\pill_bottle{\water_glass}}}
 
-% Eye drops twice daily; do not use if pregnant
+% 안약 하루 두 번, 임신 중에는 사용 금지
 \hand_wash \twice_daily{\dropper_bottle{\body_eye}} \no{\state_pregnant}
 ```
 
-## Grammar
+첫 번째 수식어는 머리의 슬롯 안에 `frame.modifier_scale` x 패널 크기(기본 0.67)로 그려지고, 나머지는 머리 위에 가로 한 줄로 놓입니다. 중요한 수식어를 먼저 쓰세요.
 
+## 기술
+
+- Python 3.10+, Pillow
+- 구성: `main.py`(컴파일러), `engine.py`(파서, 합성기, 렌더러), `dictionary.json`(어휘)
+
+## 실행 방법
+
+```bash
+pip install Pillow
+python main.py examples/sample.p
 ```
-\head                                  bare head
-\head{\modifier}                       head with one modifier inside its slot
-\head{\modifier}{\modifier}            first inside, second above the head
-\head{\modifier}{\modifier}{\modifier} first inside, rest in a row above
-\twice_daily{X}                        repeat X across 2 sub-panels
-\three_times_daily{X}                  ... across 3
-\four_times_daily{X}                   ... across 4
-\no{X}                                 bold cross over the whole pictogram
-\half{X}                               render only the left half of X
-```
 
-**No numerals, ever.** Quantity is expressed by repetition (`\twice_daily`,
-`\three_times_daily`, `\four_times_daily`) or by `\half{...}`. The
-target audience cannot read digits.
+`path/to/test1.p`를 컴파일하면 `path/to/test1/` 폴더에 라벨별 번호 PNG와 `test1.pdf`가 생깁니다.
 
-**Modifier layout:** the first modifier of a head is drawn inside the
-head's slot at `frame.modifier_scale` × panel size (default 0.67). Any
-additional modifiers form a horizontal row above the head, with the
-head shrinking vertically to make room. Order matters — put the most
-important modifier first.
+옵션:
 
-The engine adds a rounded square frame around every pictogram. Step
-order in a multi-step label is conveyed purely by left-to-right
-placement — no numerals or text appear in the output, because the
-target audience is illiterate.
-
-## Adding components
-
-Add an entry under `heads` or `modifiers` in `dictionary.json` and
-draw the matching 512×512 transparent PNG into `assets/head/` or
-`assets/modifier/`. Heads need a `slot` rect `[x0, y0, x1, y1]` in
-relative 0..1 coordinates marking the area kept empty for the first
-nested modifier. See `assets/DESIGN_GUIDE.md` for what to draw and
-where.
+- `--out DIR` 출력 폴더 지정
+- `--no-pdf` PDF 생략
+- `--size N` 패널 크기(픽셀, 기본 512)
+- `--list` 사용할 수 있는 매크로 목록을 출력하고 종료
+- `--info` 매니페스트 요약을 출력하고 종료
